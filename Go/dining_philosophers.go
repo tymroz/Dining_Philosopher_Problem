@@ -9,6 +9,8 @@ import (
 
 const numPhilosophers = 5
 
+const numberOfMeals = 20
+
 type Philosopher struct {
 	id               int
 	leftFork, rightFork *sync.Mutex
@@ -16,7 +18,7 @@ type Philosopher struct {
 
 func (p Philosopher) dine(wg *sync.WaitGroup) {
 	defer wg.Done()
-	for i := 0; i < 20; i++ { // Filozof próbuje jeść 20 razy
+	for i := 0; i < numberOfMeals; i++ {
 		p.think()
 		p.eat()
 	}
@@ -25,6 +27,7 @@ func (p Philosopher) dine(wg *sync.WaitGroup) {
 func (p Philosopher) think() {
 	fmt.Printf("Filozof %d myśli\n", p.id)
 	time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+	fmt.Printf("Filozof %d jest głodny\n", p.id)
 }
 
 func (p Philosopher) eat() {
@@ -50,10 +53,18 @@ func main() {
 
 	var philosophers [numPhilosophers]Philosopher
 	for i := 0; i < numPhilosophers; i++ {
-		philosophers[i] = Philosopher{
-			id:        i + 1,
-			leftFork:  forks[i],
-			rightFork: forks[(i+1)%numPhilosophers],
+		if i == numPhilosophers -1 {
+			philosophers[i] = Philosopher{
+				id:        i + 1,
+				leftFork:  forks[0],
+				rightFork: forks[i],
+			}
+		} else {
+			philosophers[i] = Philosopher{
+				id:        i + 1,
+				leftFork:  forks[i],
+				rightFork: forks[(i+1)%numPhilosophers],
+			}
 		}
 	}
 

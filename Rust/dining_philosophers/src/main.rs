@@ -4,6 +4,7 @@ use std::thread;
 use std::time::Duration;
 
 const NUM_PHILOSOPHERS: usize = 5;
+const NUM_OF_MEALS: usize = 20;
 
 struct Philosopher {
     id: usize,
@@ -17,7 +18,7 @@ impl Philosopher {
     }
 
     fn dine(&self) {
-        for _ in 0..20 {
+        for _ in 0..NUM_OF_MEALS {
             self.think();
             self.eat();
         }
@@ -26,6 +27,7 @@ impl Philosopher {
     fn think(&self) {
         println!("Filozof {} myśli", self.id);
         thread::sleep(Duration::from_millis(rand::thread_rng().gen_range(0..1000)));
+        println!("Filozof {} jest głodny", self.id);
     }
 
     fn eat(&self) {
@@ -43,11 +45,19 @@ fn main() {
     let forks: Vec<_> = (0..NUM_PHILOSOPHERS).map(|_| Arc::new(Mutex::new(()))).collect();
     let philosophers: Vec<_> = (0..NUM_PHILOSOPHERS)
         .map(|i| {
-            Philosopher::new(
-                i + 1,
-                Arc::clone(&forks[i]),
-                Arc::clone(&forks[(i + 1) % NUM_PHILOSOPHERS]),
-            )
+            if i == NUM_PHILOSOPHERS - 1{
+                Philosopher::new(
+                    i + 1,
+                    Arc::clone(&forks[0]),
+                    Arc::clone(&forks[i]),
+                )
+            } else {
+                Philosopher::new(
+                    i + 1,
+                    Arc::clone(&forks[i]),
+                    Arc::clone(&forks[(i + 1) % NUM_PHILOSOPHERS]),
+                )
+            }
         })
         .collect();
 

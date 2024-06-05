@@ -1,94 +1,63 @@
-with Ada.Text_IO; use Ada.Text_IO;
-with Ada.Numerics.Discrete_Random;
-with Ada.Synchronous_Task_Control; use Ada.Synchronous_Task_Control;
-with Ada.Real_Time; use Ada.Real_Time;
+with Ada.Numerics.Float_Random;         use Ada.Numerics.Float_Random;
+with Ada.Text_IO;                       use Ada.Text_IO;               
 
 procedure Dining_Philosophers is
 
-   Number_Of_Philosophers : constant Integer := 5;
+    N : constant Positive := 5;                
 
-   protected type Fork is
-      procedure Pick_Up;
-      procedure Put_Down;
-   private
-      Is_Available : Boolean := True;
-   end Fork;
+    protected type Fork is
+        entry Grab;
+        procedure Put_Down;
+    private
+        Taken : Boolean := False;
+    end Fork;
+    protected body Fork is
+        entry Grab when not Taken is
+        begin
+            Taken := True;
+        end Grab;
+        procedure Put_Down is
+        begin
+            Taken := False;
+        end Put_Down;
+    end Fork;
 
-   protected body Fork is
-      procedure Pick_Up is
-      begin
-         while not Is_Available loop
-            delay 0.001;
-         end loop;
-         Is_Available := False;
-      end Pick_Up;
+    Number_of_Meals : constant := 20;          
 
-      procedure Put_Down is
-      begin
-         Is_Available := True;
-      end Put_Down;
-   end Fork;
+    task type Philosopher (ID : Integer; First, Second : not null access Fork);
+    task body Philosopher is
+        Seed : Generator;
+    begin
+        Reset (Seed);
 
-   type Philosopher_Index is range 1 .. Number_Of_Philosophers;
+        for Meal in 1..Number_of_Meals loop
+            Put_Line ("Filozof" & Integer'Image (ID) & " myśli");
+            delay Duration (Random (Seed) * 1.500);
 
-   type Philosopher_Array is array (Philosopher_Index) of Fork;
-   Forks : Philosopher_Array;
+            Put_Line ("Filozof" & Integer'Image (ID) & " jest głodny");
+            First.Grab;
+            Second.Grab;
 
-   task type Philosopher (ID : Philosopher_Index) is
-      entry Start;
-   end Philosopher;
+            Put_Line ("Filozof" & Integer'Image (ID) & " je");
+            delay Duration (Random (Seed) * 1.500);
+            Second.Put_Down;
+            First.Put_Down;
+            
+            Put_Line ("Filozof" & Integer'Image (ID) & " skończył jeść");
+        end loop;
 
-   task body Philosopher is
-      Left_Fork, Right_Fork : Fork renames Forks (ID), Forks ((ID mod Number_Of_Philosophers) + 1);
-      package Random_Delay is new Ada.Numerics.Discrete_Random (Duration);
-      Gen : Random_Delay.Generator;
-   begin
-      accept Start;
+    end Philosopher;
 
-      loop
-         Think;
-         Left_Fork.Pick_Up;
-         Right_Fork.Pick_Up;
-         Eat;
-         Right_Fork.Put_Down;
-         Left_Fork.Put_Down;
-      end loop;
-   end Philosopher;
+    Forks : array (Natural range 1..N) of aliased Fork;
 
-   Philosophers : array (Philosopher_Index) of Philosopher;
-
-   procedure Think (ID : Philosopher_Index) is
-      package Random_Delay is new Ada.Numerics.Discrete_Random (Duration);
-      Gen : Random_Delay.Generator;
-      Delay_Time : Duration;
-   begin
-      Put_Line ("Philosopher " & ID'Img & " is thinking");
-      Random_Delay.Reset (Gen);
-      Delay_Time := Random_Delay.Random (Gen) * 1.0;
-      delay Delay_Time;
-   end Think;
-
-   procedure Eat (ID : Philosopher_Index) is
-      package Random_Delay is new Ada.Numerics.Discrete_Random (Duration);
-      Gen : Random_Delay.Generator;
-      Delay_Time : Duration;
-   begin
-      Put_Line ("Philosopher " & ID'Img & " is eating");
-      Random_Delay.Reset (Gen);
-      Delay_Time := Random_Delay.Random (Gen) * 1.0;
-      delay Delay_Time;
-      Put_Line ("Philosopher " & ID'Img & " finished eating");
-   end Eat;
+    Philosophers : array (Natural range 1..N) of access Philosopher;
 
 begin
-   for I in Philosopher_Index loop
-      Philosophers (I).Start;
-   end loop;
-
-   delay 20.0;
-
-   for I in Philosopher_Index loop
-      abort Philosophers (I);
-   end loop;
+    for I in 1..N loop
+        if I = N then
+            Philosophers(I) := new Philosopher (ID => I, First => Forks(1)'Access, Second => Forks(I)'Access);
+        else
+            Philosophers(I) := new Philosopher (ID => I, First => Forks(I)'Access, Second => Forks(I+1)'Access);
+        end if;
+    end loop;
 end Dining_Philosophers;
-
