@@ -1,74 +1,84 @@
-with Ada.Text_IO; use Ada.Text_IO;
-with Ada.Real_Time; use Ada.Real_Time;
-with Ada.Synchronous_Task_Control; use Ada.Synchronous_Task_Control;
+with Ada.Text_IO;
+with Ada.Integer_Text_IO;
+with Ada.Calendar;
+with Ada.Real_Time;
+with Ada.Numerics.Discrete_Random;
+use Ada.Text_IO;
+use Ada.Integer_Text_IO;
+use Ada.Calendar;
+use Ada.Real_Time;
 
-procedure Filozofowie is
+procedure Dining_Philosophers is
+   NUM_PHILOSOPHERS : constant Positive := 5;
+   TASK_DURATION_MIN : constant Time_Span := Milliseconds (100);
+   TASK_DURATION_MAX : constant Time_Span := Milliseconds (1000);
 
-   -- Liczba filozofów
-   N : constant Positive := 5;
+   package Rand_Gen is new Ada.Numerics.Discrete_Random (1 .. 1000);
+   use Rand_Gen;
+   Gen : Generator;
 
-   type Filozof_Id is range 1 .. N;
+   type Fork is tagged null record;
+   type Fork_Access is access all Fork;
+   Forks : array (1 .. NUM_PHILOSOPHERS) of Fork_Access;
 
-   -- Typ widelca, każdy widelec jest task'em kontrolowanym synchronicznie
-   task type Widelec is
-      entry Podnies;
-      entry Odloz;
-   end Widelec;
-
-   task body Widelec is
-      available : Synchronous_Task_Control.Suspension_Object;
+   task type Philosopher (Id : Positive);
+   task body Philosopher is
+      procedure Random_Sleep (Duration_Min, Duration_Max : Time_Span) is
+         Start : Time := Clock;
+         Duration : Time_Span := Duration_Min + Time_Span'Fraction(Float(Sample(Gen)) / 1000.0) * (Duration_Max - Duration_Min);
+      begin
+         delay Duration;
+      end Random_Sleep;
    begin
-      Loop
-         accept Podnies do
-            Set_False(available);
-         end Podnies;
+      for I in 1 .. 3 loop
+         -- Thinking
+         Put_Line("Philosopher " & Positive'Image(Id) & " is thinking");
+         Random_Sleep(TASK_DURATION_MIN, TASK_DURATION_MAX);
 
-         Set_True(available);
-         Accept Odloz;
-      end Loop;
-   end Widelec;
+         -- Eating
+         if Id = 1 then
+            Forks(Id).all.Lock;
+            Forks(NUM_PHILOSOPHERS).all.Lock;
+         else
+            Forks(Id).all.Lock;
+            Forks(Id - 1).all.Lock;
+         end if;
+         Put_Line("Philosopher " & Positive'Image(Id) & " is eating");
+         Random_Sleep(TASK_DURATION_MIN, TASK_DURATION_MAX);
 
-   -- Tablica widelców
-   Widelce : array (Filozof_Id) of Widelec;
+         -- Finished eating
+         if Id = 1 then
+            Forks(NUM_PHILOSOPHERS).all.Unlock;
+            Forks(Id).all.Unlock;
+         else
+            Forks(Id - 1).all.Unlock;
+            Forks(Id).all.Unlock;
+         end if;
+         Put_Line("Philosopher " & Positive'Image(Id) & " finished eating");
+      end loop;
+   end Philosopher;
 
-   -- Typ task'a filozofa
-   task type Filozof(F : Filozof_Id);
+   task type Fork is
+      entry Lock;
+      entry Unlock;
+   end Fork;
 
-   task body Filozof is
-      procedure Mysl is
-         use Ada.Real_Time;
-         use Ada.Text_IO;
-      begin
-         Put_Line("Filozof" & F'Img & " myśli.");
-         delay until Clock + Milliseconds(500 + Integer'Mod(F * 1000, 500));
-      end Mysl;
-
-      procedure Jedz is
-         use Ada.Real_Time;
-         use Ada.Text_IO;
-      begin
-         Put_Line("Filozof" & F'Img & " je.");
-         delay until Clock + Milliseconds(500 + Integer'Mod(F * 1000, 500));
-      end Jedz;
-
+   task body Fork is
    begin
       loop
-         Mysl;
-         Widelce(F).Podnies;
-         Widelce((F mod N) + 1).Podnies;
-
-         Jedz;
-
-         Widelce(F).Odloz;
-         Widelce((F mod N) + 1).Odloz;
+         accept Lock;
+         accept Unlock;
       end loop;
-   end Filozof;
+   end Fork;
 
-   -- Tablica filozofów
-   Filozofowie : array (Filozof_Id) of Filozof(Filozof_Id'(1)) := (
-      (Filozof_Id'(1)), (Filozof_Id'(2)), (Filozof_Id'(3)), (Filozof_Id'(4)), (Filozof_Id'(5))
-   );
+   Philosopher_Tasks : array (1 .. NUM_PHILOSOPHERS) of Philosopher := (others => Philosopher'(Id => <>));
 
 begin
-   null;
-end Filozofowie;
+   -- Initialize forks
+   for I in Forks'Range loop
+      Forks(I) := new Fork;
+   end loop;
+
+   -- Wait for all philosophers to finish
+   delay 10.0;
+end Dining_Philosophers;
